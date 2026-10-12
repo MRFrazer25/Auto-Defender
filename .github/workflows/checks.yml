@@ -35,6 +35,12 @@ jobs:
       - name: No real IPs or organizations in demo data and docs
         run: python tools/check_demo_data.py
 
+      # Catches real bugs only (syntax errors, undefined names), not style
+      - name: Lint (ruff)
+        run: |
+          pip install ruff==0.6.9
+          ruff check --select E9,F63,F7,F82 .
+
       - name: Tests
         run: python -m pytest -q
 
