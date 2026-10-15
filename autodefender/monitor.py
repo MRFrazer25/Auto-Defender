@@ -21,13 +21,13 @@ from autodefender.database import Database
 from autodefender.detector import ThreatDetector
 from autodefender.models import Threat, Action
 from autodefender.parser import MAX_EVENT_LENGTH, SuricataParser
-
-# Bound how much of a growing log we pull into memory on each pass
-READ_CHUNK_SIZE = 4 * 1024 * 1024
 from autodefender.suricata_manager import SuricataManager
 from autodefender.utils.geoip import enrich_threat_context
 
 logger = logging.getLogger(__name__)
+
+# Bound how much of a growing log we pull into memory on each pass
+READ_CHUNK_SIZE = 4 * 1024 * 1024
 
 # AI work (explanations and rule suggestions) runs on a small, bounded pool
 AI_WORKERS = 2
@@ -52,6 +52,8 @@ class SuricataLogHandler(FileSystemEventHandler):
         self._read_lock = threading.Lock()
         self._partial = b""
         self._skip_rest_of_line = False
+        # (device, inode) of the file being read, to spot a rotation that swaps in a new file
+        self._file_id = None
         self._initialize_position()
     
     def _initialize_position(self):
@@ -63,7 +65,9 @@ class SuricataLogHandler(FileSystemEventHandler):
             )
             self.last_position = 0
         elif self.file_path.exists():
-            self.last_position = self.file_path.stat().st_size
+            stat = self.file_path.stat()
+            self.last_position = stat.st_size
+            self._file_id = (stat.st_dev, stat.st_ino)
             logger.debug(
                 "Initialized log handler position at EOF (%s bytes) for %s",
                 self.last_position,
@@ -97,9 +101,14 @@ class SuricataLogHandler(FileSystemEventHandler):
                 return
             
             try:
-                current_size = self.file_path.stat().st_size
-                
-                if current_size < self.last_position:
+                stat = self.file_path.stat()
+                current_size = stat.st_size
+                file_id = (stat.st_dev, stat.st_ino)
+                # A rotated-in file may already be larger than our old position, so compare identity too
+                replaced = self._file_id is not None and file_id != self._file_id
+                self._file_id = file_id
+
+                if replaced or current_size < self.last_position:
                     logger.info(f"Log file {self.file_path} was rotated or truncated; reading from the start")
                     self.last_position = 0
                     self._partial = b""

@@ -101,7 +101,8 @@ SECTIONS = {
 ### Security best practices
 
 - Keep the console on localhost, or put it behind a reverse proxy with HTTPS if others need it.
-- For a console other people can reach, set a long, unique `AUTODEFENDER_UI_PASSWORD`. Leave it unset for an open demo.
+- For a console other people can reach, set a long, unique `AUTODEFENDER_UI_PASSWORD`. Leave it unset for an open demo, which turns off uploads, edits, data clearing, webhooks, and custom AI endpoints, and keeps rule changes as dry runs.
+- Behind your own reverse proxy, set `AUTODEFENDER_TRUST_PROXY=1` so failed sign-ins lock out the real client address instead of the proxy's.
   Lockout is per client (5 failures / 5 minutes); a global backoff slows mass guessing
   without locking the real operator out.
 - Review whitelists and blacklists regularly to avoid stale entries.

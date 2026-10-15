@@ -15,6 +15,7 @@ import logging
 import shutil
 import re
 import os
+import time
 import subprocess  # nosec B404 - only runs suricatasc with fixed arguments
 import threading
 from contextlib import contextmanager
@@ -32,6 +33,8 @@ DROP_RULE_PATTERN = re.compile(
 )
 
 MSG_MAX_LENGTH = 150
+# How long a rules writer waits for another one to finish on Windows
+LOCK_TIMEOUT_SECONDS = 120
 
 
 def _acquire_file_lock(handle):
@@ -43,7 +46,15 @@ def _acquire_file_lock(handle):
             handle.write(b"0")
             handle.flush()
         handle.seek(0)
-        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        # LK_LOCK gives up after about 10 seconds, so keep trying while another writer holds it
+        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                return
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
     else:
         import fcntl
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)

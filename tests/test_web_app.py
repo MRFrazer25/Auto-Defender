@@ -67,6 +67,46 @@ def test_opens_without_a_password(app_env, monkeypatch):
     assert not any(b.label == "Sign out" for b in at.sidebar.button)
 
 
+def test_public_demo_turns_off_risky_controls(app_env, monkeypatch):
+    monkeypatch.delenv("AUTODEFENDER_UI_PASSWORD")
+    state = {"setup_complete": True, "db_path": app_env["db"], "log_path": "demo/example_suricata_log.json",
+             "suricata_enabled": True, "suricata_dry_run": False, "suricata_rules_dir": "./suricata_rules",
+             "ollama_endpoint": "http://10.0.0.5:11434", "webhook_url": "https://hooks.example.net/x"}
+    at = new_app({**state, "navigation": "Settings"}).run()
+    assert not at.exception, errors(at)
+    assert any("Public demo" in i.value for i in at.sidebar.info)
+    for label in ("Delete old threats",):
+        assert next(b for b in at.button if b.label == label).disabled
+    assert next(t for t in at.text_input if t.label == "Ollama endpoint URL").disabled
+    assert next(c for c in at.checkbox if c.label.startswith("Dry-run")).disabled
+
+    from streamlit_pages import session_config
+    monkeypatch.setattr(session_config, "configured_password", lambda: "")  # Ignore any local secrets.toml
+    for key, value in state.items():
+        st.session_state[key] = value
+    config = session_config.config_from_session()
+    assert config.SURICATA_DRY_RUN and not config.AUTO_APPROVE_SURICATA
+    assert config.ollama_endpoint != "http://10.0.0.5:11434"
+    assert session_config.webhook_url_from_session() == ""
+
+    at = new_app({**state, "navigation": "IP Management"}).run()
+    assert not at.exception, errors(at)
+    assert all(b.disabled for b in at.button if "whitelist" in b.label or "blacklist" in b.label)
+
+
+def test_proxy_header_is_only_used_when_trusted(app_env, monkeypatch):
+    import streamlit_app
+
+    class FakeContext:
+        headers = {"X-Forwarded-For": "198.51.100.1, 203.0.113.7"}
+        ip_address = "10.0.0.2"
+
+    monkeypatch.setattr(streamlit_app.st, "context", FakeContext())
+    assert streamlit_app._client_key() == "10.0.0.2"
+    monkeypatch.setenv("AUTODEFENDER_TRUST_PROXY", "1")
+    assert streamlit_app._client_key() == "203.0.113.7"
+
+
 def test_short_shared_password_refused(app_env, monkeypatch):
     monkeypatch.setenv("AUTODEFENDER_UI_PASSWORD", "short")
     at = new_app().run()

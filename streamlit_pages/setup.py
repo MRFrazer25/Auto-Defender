@@ -13,7 +13,7 @@ import streamlit as st
 from autodefender.config import Config
 from autodefender.notifications.webhook import is_valid_webhook_url
 from autodefender.utils.path_utils import sanitize_path
-from streamlit_pages.session_config import record
+from streamlit_pages.session_config import DEMO_LOCKED, public_demo, record
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +146,7 @@ def show() -> None:
             help="Opens your system's file picker to select log file(s).",
             key="upload_log",
             accept_multiple_files=True,
+            disabled=public_demo(),
             label_visibility="collapsed",
         )
         if uploaded_log:
@@ -200,6 +201,7 @@ def show() -> None:
             type=["db", "sqlite", "sqlite3"],
             help="Opens your system's file picker to select database file.",
             key="upload_db",
+            disabled=public_demo(),
             label_visibility="collapsed",
         )
         if uploaded_db:
@@ -222,6 +224,7 @@ def show() -> None:
                 st.success("File saved. Path updated above.")
                 st.rerun()
 
+    demo = public_demo()
     with st.form("setup_form"):
 
         st.subheader("AI service")
@@ -229,6 +232,8 @@ def show() -> None:
             "Ollama endpoint URL",
             value=st.session_state.get("ollama_endpoint", default_ollama_endpoint),
             placeholder="Example: http://127.0.0.1:11434",
+            disabled=demo,
+            help=DEMO_LOCKED if demo else None,
         )
         ollama_model = st.text_input(
             "Ollama model name",
@@ -242,6 +247,7 @@ def show() -> None:
             help="If provided, approved actions can trigger this webhook (Slack, Teams, etc.). "
                  "Webhook URLs work like passwords, so the field is masked.",
             type="password",
+            disabled=demo,
         )
 
         st.subheader("Suricata integration")
@@ -266,6 +272,11 @@ def show() -> None:
         log_path = st.session_state.get("log_path", default_log_path)
         db_path = st.session_state.get("db_path", default_db_path)
         
+        if demo:
+            # The open demo can't point the server at other hosts
+            ollama_endpoint = config.OLLAMA_ENDPOINT
+            webhook_url = ""
+
         errors = []
 
         if not log_path.strip():

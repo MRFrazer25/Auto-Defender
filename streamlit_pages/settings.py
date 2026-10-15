@@ -10,7 +10,7 @@ from autodefender.config import Config
 from autodefender.database import Database
 from autodefender.utils.geoip import geoip_enabled
 from autodefender.utils.path_utils import sanitize_path
-from streamlit_pages.session_config import config_from_session, record
+from streamlit_pages.session_config import DEMO_LOCKED, config_from_session, public_demo, record
 from streamlit_pages.setup import is_valid_model_name, is_valid_service_url
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,12 @@ def show() -> None:
             "Ollama endpoint URL",
             value=config.ollama_endpoint or "",
             placeholder="Example: http://127.0.0.1:11434",
+            disabled=public_demo(),
+            help=DEMO_LOCKED if public_demo() else None,
         )
+        if public_demo():
+            # The open demo can't point the server at other hosts
+            endpoint = Config.OLLAMA_ENDPOINT
         model = st.text_input(
             "Ollama model name",
             value=config.ollama_model or "",
@@ -149,7 +154,7 @@ def show() -> None:
         dry_run = st.checkbox(
             "Dry-run mode (log proposed rules without writing them)",
             value=config.SURICATA_DRY_RUN,
-            disabled=not enable_suricata,
+            disabled=not enable_suricata or public_demo(),
         )
         block_hours = st.number_input(
             "Block duration in hours (0 = permanent until unblocked)",
@@ -164,13 +169,13 @@ def show() -> None:
         auto_reload = st.checkbox(
             "Reload Suricata rules automatically after changes (uses suricatasc)",
             value=config.SURICATA_AUTO_RELOAD,
-            disabled=not enable_suricata,
+            disabled=not enable_suricata or public_demo(),
             help="Needs Suricata's unix command socket enabled. Without it, restart Suricata after rule changes.",
         )
         auto_approve = st.checkbox(
             "Write AI-suggested rules without asking (not recommended)",
             value=config.AUTO_APPROVE_SURICATA,
-            disabled=not enable_suricata,
+            disabled=not enable_suricata or public_demo(),
             help="Rules are still limited to blocking one non-whitelisted source IP.",
         )
 
@@ -299,7 +304,7 @@ def show_database_tab(db_path: str) -> None:
             value=Config.RETENTION_DAYS or 90,
             help="Keeping only what you need limits how much IP and traffic data is stored.",
         )
-        if st.button("Delete old threats"):
+        if st.button("Delete old threats", disabled=public_demo(), help=DEMO_LOCKED if public_demo() else None):
             deleted = db.purge_threats_older_than(int(retention_days))
             record("threats_purged", {"older_than_days": int(retention_days), "deleted": deleted})
             st.success(f"Deleted {deleted} threat(s) older than {int(retention_days)} days.")
@@ -315,7 +320,7 @@ def show_database_tab(db_path: str) -> None:
                 f"I understand this permanently deletes: {clear_option.lower()}",
                 key="confirm_clear",
             )
-            if st.button("Execute clear operation", disabled=not confirm_clear):
+            if st.button("Execute clear operation", disabled=not confirm_clear or public_demo()):
                 db.clear(
                     threats=clear_option == "All threats and actions",
                     actions=True,

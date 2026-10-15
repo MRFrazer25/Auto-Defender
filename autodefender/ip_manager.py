@@ -4,6 +4,7 @@ import ipaddress
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Set, Optional
 
@@ -11,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 # Where the lists are stored when no path is given (the Docker image points this at /data)
 IP_LISTS_ENV = "AUTODEFENDER_IP_LISTS"
+# Lookups check the file for outside changes at most this often (seconds)
+RELOAD_CHECK_INTERVAL = 1.0
 
 
 def normalize_ip(ip: Optional[str]) -> Optional[str]:
@@ -38,6 +41,7 @@ class IPManager:
         self.whitelist: Set[str] = set()
         self.blacklist: Set[str] = set()
         self._lists_stamp: Optional[tuple[int, int]] = None
+        self._last_check = 0.0
         self._load_lists()
 
     def _file_stamp(self) -> Optional[tuple[int, int]]:
@@ -54,8 +58,16 @@ class IPManager:
         except OSError:
             return None
 
-    def _reload_if_stale(self):
-        """Reload lists when another process or page has rewritten the file."""
+    def _reload_if_stale(self, force: bool = False):
+        """Reload lists when another process or page has rewritten the file.
+
+        Lookups run once per event, so they only stat the file about once a second.
+        Edits pass force=True so they start from the latest file and don't drop changes made elsewhere.
+        """
+        now = time.monotonic()
+        if not force and now - self._last_check < RELOAD_CHECK_INTERVAL:
+            return
+        self._last_check = now
         stamp = self._file_stamp()
         if stamp != self._lists_stamp:
             self._load_lists()
@@ -118,6 +130,7 @@ class IPManager:
             ValueError: If ip is not a valid IP address
         """
         ip = self._require_ip(ip)
+        self._reload_if_stale(force=True)
         if ip in self.whitelist:
             return False
         self.whitelist.add(ip)
@@ -141,6 +154,7 @@ class IPManager:
             ValueError: If ip is not a valid IP address
         """
         ip = self._require_ip(ip)
+        self._reload_if_stale(force=True)
         if ip in self.blacklist:
             return False
         self.blacklist.add(ip)
@@ -161,6 +175,7 @@ class IPManager:
             True if removed, False if not found
         """
         ip = normalize_ip(ip)
+        self._reload_if_stale(force=True)
         if ip in self.whitelist:
             self.whitelist.remove(ip)
             self._save_lists()
@@ -179,6 +194,7 @@ class IPManager:
             True if removed, False if not found
         """
         ip = normalize_ip(ip)
+        self._reload_if_stale(force=True)
         if ip in self.blacklist:
             self.blacklist.remove(ip)
             self._save_lists()

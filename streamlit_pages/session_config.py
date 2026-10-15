@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Optional
 
@@ -14,6 +15,31 @@ from autodefender.ip_manager import IPManager
 from autodefender.utils.path_utils import sanitize_path
 
 logger = logging.getLogger(__name__)
+
+PASSWORD_ENV = "AUTODEFENDER_UI_PASSWORD"
+DEMO_LOCKED = "Turned off in the public demo. Set AUTODEFENDER_UI_PASSWORD to use it."
+
+
+def configured_password() -> str:
+    """Read the console password from the environment or Streamlit secrets."""
+    password = os.getenv(PASSWORD_ENV, "")
+    if not password:
+        try:
+            password = str(st.secrets.get(PASSWORD_ENV, ""))
+        except Exception:
+            # No secrets.toml present
+            password = ""
+    return password
+
+
+def public_demo() -> bool:
+    """True when no console password is set, so anyone who opens the page can use it.
+
+    In that mode, controls that change shared state or make the server contact
+    other hosts are turned off: uploads, playbook and IP-list edits, clearing
+    data, webhooks, and custom Ollama endpoints. Rule writes are forced to dry run.
+    """
+    return not configured_password()
 
 
 def config_from_session() -> Config:
@@ -37,6 +63,12 @@ def config_from_session() -> Config:
     config.PORT_SCAN_THRESHOLD = state.get("port_scan_threshold", config.PORT_SCAN_THRESHOLD)
     config.PORT_SCAN_WINDOW_SECONDS = state.get("port_scan_window_seconds", config.PORT_SCAN_WINDOW_SECONDS)
     config.ALERT_COOLDOWN_SECONDS = state.get("alert_cooldown_seconds", config.ALERT_COOLDOWN_SECONDS)
+    if public_demo():
+        # Visitors can't aim the server at other hosts or change real rule files
+        config.ollama_endpoint = Config.OLLAMA_ENDPOINT
+        config.SURICATA_DRY_RUN = True
+        config.AUTO_APPROVE_SURICATA = False
+        config.SURICATA_AUTO_RELOAD = False
     return config
 
 
@@ -47,6 +79,8 @@ def record(action: str, details: Optional[dict] = None) -> None:
 
 def webhook_url_from_session() -> str:
     """Return the webhook URL saved on the Setup page (or the WEBHOOK_URL default)."""
+    if public_demo():
+        return ""
     return st.session_state.get("webhook_url", Config.WEBHOOK_URL) or ""
 
 

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 from autodefender.utils.display import md_escape
-from streamlit_pages.session_config import record
+from streamlit_pages.session_config import DEMO_LOCKED, public_demo, record
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,9 @@ def load_playbooks() -> List[Dict[str, Any]]:
 
 def save_playbooks(playbooks: List[Dict[str, Any]]) -> bool:
     """Save playbooks to JSON file."""
+    if public_demo():
+        st.error(DEMO_LOCKED)
+        return False
     try:
         PLAYBOOK_FILE.parent.mkdir(parents=True, exist_ok=True)
         # Write a temporary file and swap it in so a crash can't leave a half-written file
@@ -94,6 +97,8 @@ def show():
     """Display the playbook editor interface."""
     st.title("Playbook Editor")
     st.markdown("Create and customize automated response workflows for detected threats.")
+    if public_demo():
+        st.info("Playbooks are read-only in the public demo. " + DEMO_LOCKED)
     
     playbooks = load_playbooks()
     
@@ -240,10 +245,10 @@ def edit_playbook_form(playbook: Dict[str, Any] | None, all_playbooks: List[Dict
         # Form submission buttons
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            save_btn = st.form_submit_button("[Save] Save Playbook", type="primary")
+            save_btn = st.form_submit_button("[Save] Save Playbook", type="primary", disabled=public_demo())
         with col2:
             if playbook is not None:
-                delete_btn = st.form_submit_button("[Delete] Delete", type="secondary")
+                delete_btn = st.form_submit_button("[Delete] Delete", type="secondary", disabled=public_demo())
             else:
                 delete_btn = False
         

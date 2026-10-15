@@ -56,11 +56,14 @@ def sanitize_path(path_str: str, include_log_dirs: bool = False) -> str:
         raise ValueError("Path contains invalid characters.")
 
     resolved = os.path.realpath(os.path.expanduser(cleaned))
+    # normcase so Windows paths match whatever their letter case (no-op elsewhere)
+    resolved_key = os.path.normcase(resolved)
     for base in allowed_base_dirs(include_log_dirs):
-        if resolved == base:
+        base_key = os.path.normcase(base)
+        if resolved_key == base_key:
             return base
         # Trailing separator so /data doesn't also allow /data-other
-        if resolved.startswith(os.path.join(base, "")):
+        if resolved_key.startswith(os.path.join(base_key, "")):
             return resolved
 
     raise ValueError(

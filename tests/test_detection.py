@@ -116,7 +116,8 @@ def test_ip_lists_validate_and_normalize(tmp_path):
     assert ips.is_blacklisted("2001:0db8:0::1")
 
 
-def test_whitelist_reloads_when_file_changes(tmp_path):
+def test_whitelist_reloads_when_file_changes(tmp_path, monkeypatch):
+    monkeypatch.setattr("autodefender.ip_manager.RELOAD_CHECK_INTERVAL", 0)
     path = tmp_path / "ips.json"
     writer = IPManager(str(path))
     reader = IPManager(str(path))
@@ -125,3 +126,24 @@ def test_whitelist_reloads_when_file_changes(tmp_path):
     assert reader.is_whitelisted("203.0.113.8")
     writer.remove_whitelist("203.0.113.8")
     assert not reader.is_whitelisted("203.0.113.8")
+
+
+def test_edits_from_two_managers_are_both_kept(tmp_path):
+    """An edit starts from the latest file, so it can't erase a change saved by another page or process."""
+    path = tmp_path / "ips.json"
+    first, second = IPManager(str(path)), IPManager(str(path))
+    first.add_whitelist("203.0.113.8")
+    second.add_blacklist("203.0.113.9")
+    assert IPManager(str(path)).get_whitelist() == ["203.0.113.8"]
+    assert first.remove_whitelist("203.0.113.8")  # Sees second's blacklist entry too
+    assert IPManager(str(path)).get_blacklist() == ["203.0.113.9"]
+
+
+def test_lookups_do_not_stat_the_file_every_time(tmp_path, monkeypatch):
+    ips = IPManager(str(tmp_path / "ips.json"))
+    stamps = []
+    real = ips._file_stamp
+    monkeypatch.setattr(ips, "_file_stamp", lambda: stamps.append(1) or real())
+    for _ in range(100):
+        ips.is_whitelisted("203.0.113.8")
+    assert len(stamps) <= 1

@@ -75,3 +75,20 @@ def test_chunked_read_processes_large_growth(tmp_path, monkeypatch):
         assert wait_for(lambda: monitor.events_processed == 10)
     finally:
         monitor.stop()
+
+
+def test_rotation_to_a_larger_file_starts_over(tmp_path):
+    """A rotated-in file that is already bigger than the old position is still read from the start."""
+    log = tmp_path / "eve.json"
+    log.write_text(alert_line(1)[:30])  # Half-written line in the old file
+    seen = []
+    handler = monitor_mod.SuricataLogHandler(seen.append, str(log), start_from_beginning=True)
+    handler.process_new_lines()
+    assert seen == []
+    rotated = tmp_path / "eve.json.1"
+    log.rename(rotated)
+    new = tmp_path / "eve.new"
+    new.write_text(alert_line(2) + "\n" + alert_line(3) + "\n")
+    new.rename(log)
+    handler.process_new_lines()
+    assert [json.loads(line)["alert"]["signature"] for line in seen] == ["ET TEST 2", "ET TEST 3"]

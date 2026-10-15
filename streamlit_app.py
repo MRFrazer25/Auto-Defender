@@ -5,8 +5,8 @@ import functools
 import hashlib
 import hmac
 import importlib
-import os
 import logging
+import os
 import secrets
 import threading
 import time
@@ -21,6 +21,8 @@ from autodefender.login_lockout import (
     global_backoff,
     lockout_remaining,
 )
+from streamlit_pages.session_config import PASSWORD_ENV, configured_password, public_demo
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -65,8 +67,9 @@ st.markdown(
 )
 
 
-PASSWORD_ENV = "AUTODEFENDER_UI_PASSWORD"
 MIN_PASSWORD_LENGTH = 12
+# Set when the console runs behind a reverse proxy that sets X-Forwarded-For
+TRUST_PROXY_ENV = "AUTODEFENDER_TRUST_PROXY"
 PBKDF2_ITERATIONS = 200_000
 # Sign the session out after this long without any interaction
 IDLE_TIMEOUT_SECONDS = 30 * 60
@@ -106,8 +109,29 @@ def _login_guard() -> dict:
     return {"lock": threading.Lock(), "failures": {}, "global_failures": []}
 
 
+def _forwarded_client() -> str | None:
+    """Original client address from X-Forwarded-For, only when the deployment trusts its proxy.
+
+    Behind a reverse proxy every visitor shares the proxy's address, so one bad actor
+    could lock everyone out. The header is easy to fake without a proxy, so it is
+    off unless AUTODEFENDER_TRUST_PROXY is set.
+    """
+    if os.getenv(TRUST_PROXY_ENV, "").strip().lower() not in {"1", "true", "yes"}:
+        return None
+    try:
+        forwarded = st.context.headers.get("X-Forwarded-For", "")
+    except Exception:
+        return None
+    # The proxy appends the address it saw, so the last entry is the one it vouches for
+    last = forwarded.split(",")[-1].strip() if forwarded else ""
+    return last or None
+
+
 def _client_key() -> str:
-    """Identify the caller for lockout (Streamlit peer address, else 'unknown')."""
+    """Identify the caller for lockout (trusted proxy header, Streamlit peer address, else 'unknown')."""
+    forwarded = _forwarded_client()
+    if forwarded:
+        return forwarded
     try:
         ip = getattr(st.context, "ip_address", None)
     except Exception:
@@ -150,18 +174,6 @@ def _persisted_failures(now: float, client_key: str) -> list:
         return []
 
 
-def _configured_password() -> str:
-    """Read the console password from the environment or Streamlit secrets."""
-    password = os.getenv(PASSWORD_ENV, "")
-    if not password:
-        try:
-            password = str(st.secrets.get(PASSWORD_ENV, ""))
-        except Exception:
-            # No secrets.toml present
-            password = ""
-    return password
-
-
 def ensure_session_defaults() -> None:
     """Set up default session state values."""
     defaults = {
@@ -180,7 +192,7 @@ def require_password() -> bool:
     The public Streamlit demo leaves it unset. Set it for a local or shared deployment
     that should not be open to everyone who can reach the page.
     """
-    password_required = _configured_password()
+    password_required = configured_password()
     if not password_required:
         st.session_state.authenticated = True
         return True
@@ -235,6 +247,8 @@ def require_password() -> bool:
     if submitted:
         guard = _login_guard()
         client = _client_key()
+        # Hash before taking the lock so slow PBKDF2 work doesn't serialize every sign-in
+        supplied = _password_digest(password_input)
         # Check the lockout and the password in one locked step, so parallel
         # attempts can't slip past the attempt limit
         with guard["lock"]:
@@ -252,7 +266,6 @@ def require_password() -> bool:
                 )
             else:
                 # Compare fixed-length digests in constant time
-                supplied = _password_digest(password_input)
                 expected = _configured_password_digest(password_required)
                 if hmac.compare_digest(supplied, expected):
                     guard["failures"].pop(client, None)
@@ -303,7 +316,12 @@ def main() -> None:
         st.stop()
 
     st.sidebar.title("AutoDefender")
-    if _configured_password() and st.sidebar.button("Sign out"):
+    if public_demo():
+        st.sidebar.info(
+            "Public demo: uploads, edits, data clearing, webhooks, and custom AI endpoints are off, "
+            "and rule changes are dry runs. Set AUTODEFENDER_UI_PASSWORD to turn them on."
+        )
+    if configured_password() and st.sidebar.button("Sign out"):
         audit.record("console", "sign_out")
         st.session_state.clear()
         st.rerun()

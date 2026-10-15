@@ -143,3 +143,16 @@ def test_path_allow_list(in_tmp, tmp_path_factory, monkeypatch):
         sanitize_path("/var/log/suricata/x.db")
     monkeypatch.setenv("AUTODEFENDER_ALLOWED_DIRS", str(outside))
     assert sanitize_path(str(outside / "x.db"))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows paths ignore letter case")
+def test_path_allow_list_ignores_case_on_windows(in_tmp):
+    inside = os.path.join(str(in_tmp), "data.db")
+    assert sanitize_path(inside.upper())
+    assert sanitize_path(inside.lower())
+
+
+def test_path_allow_list_rejects_sibling_folders(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTODEFENDER_ALLOWED_DIRS", str(tmp_path / "data"))
+    with pytest.raises(ValueError):
+        sanitize_path(str(tmp_path / "data-other" / "x.db"))

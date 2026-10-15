@@ -15,7 +15,7 @@ On Linux/macOS the databases and CLI exports are created readable by the current
 
 ## Who can do what
 
-- **Web console**: anyone who can open the page when no password is set (the public demo). When `AUTODEFENDER_UI_PASSWORD` is set, only someone who knows it. There are no user accounts or sign-up pages. A local install listens on localhost only.
+- **Web console**: anyone who can open the page when no password is set (the public demo). In that mode uploads, playbook and IP list edits, data deletion, webhooks, and custom Ollama endpoints are turned off and rule changes are dry runs, so a visitor can't change shared state or aim the server at other hosts. When `AUTODEFENDER_UI_PASSWORD` is set, only someone who knows it. There are no user accounts or sign-up pages. A local install listens on localhost only.
 - **CLI**: anyone who can run commands on the machine (same trust as the files themselves).
 - **Log authors**: anyone who can send network traffic can influence log fields (signatures, IPs, HTTP data). Treated as untrusted input.
 

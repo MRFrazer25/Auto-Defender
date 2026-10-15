@@ -5,7 +5,7 @@ import streamlit as st
 
 from autodefender.database import Database
 from autodefender.ip_manager import IPManager, normalize_ip
-from streamlit_pages.session_config import config_from_session, record
+from streamlit_pages.session_config import DEMO_LOCKED, config_from_session, public_demo, record
 
 
 def is_valid_ip(ip: str) -> bool:
@@ -20,6 +20,10 @@ def show() -> None:
         "Manage trusted and blocked IP addresses. Whitelisted IPs are ignored by the "
         "detector. Blacklisted IPs generate high-priority alerts."
     )
+
+    demo = public_demo()
+    if demo:
+        st.info("The IP lists are read-only in the public demo. " + DEMO_LOCKED)
 
     ip_manager = IPManager()
     try:
@@ -43,7 +47,7 @@ def show() -> None:
                 "Add an IP to the whitelist",
                 placeholder="Example: 192.168.1.100",
             )
-            submitted = st.form_submit_button("Add to whitelist")
+            submitted = st.form_submit_button("Add to whitelist", disabled=demo)
             if submitted:
                 if not new_ip:
                     st.error("Enter an IP address before submitting.")
@@ -64,7 +68,7 @@ def show() -> None:
                     threat_count = threat_counts.get(ip_value, 0)
                     st.text(f"{ip_value} (would ignore {threat_count} threats)")
                 with row_col2:
-                    if st.button("Remove", key=f"remove_whitelist_{ip_value}"):
+                    if st.button("Remove", key=f"remove_whitelist_{ip_value}", disabled=demo):
                         ip_manager.remove_whitelist(ip_value)
                         record("whitelist_removed", {"ip": ip_value})
                         st.success(f"Removed {ip_value} from the whitelist.")
@@ -81,7 +85,7 @@ def show() -> None:
                 "Add an IP to the blacklist",
                 placeholder="Example: 203.0.113.50",
             )
-            submitted = st.form_submit_button("Add to blacklist")
+            submitted = st.form_submit_button("Add to blacklist", disabled=demo)
             if submitted:
                 if not new_ip:
                     st.error("Enter an IP address before submitting.")
@@ -102,7 +106,7 @@ def show() -> None:
                     threat_count = threat_counts.get(ip_value, 0)
                     st.text(f"{ip_value} (generated {threat_count} threats)")
                 with row_col2:
-                    if st.button("Remove ", key=f"remove_blacklist_{ip_value}"):
+                    if st.button("Remove ", key=f"remove_blacklist_{ip_value}", disabled=demo):
                         ip_manager.remove_blacklist(ip_value)
                         record("blacklist_removed", {"ip": ip_value})
                         st.success(f"Removed {ip_value} from the blacklist.")
@@ -122,7 +126,7 @@ def show() -> None:
             placeholder="192.168.1.100\n192.168.1.101\n192.168.1.102",
             height=150,
         )
-        if st.button("Import addresses"):
+        if st.button("Import addresses", disabled=demo):
             if not ip_text:
                 st.error("Enter at least one IP address.")
             else:
@@ -233,7 +237,7 @@ def show() -> None:
                 st.caption("This source is not a valid IP address and can't be listed.")
                 selected_ip = None
             with col_whitelist:
-                if selected_ip and st.button("Add to whitelist", use_container_width=True):
+                if selected_ip and st.button("Add to whitelist", use_container_width=True, disabled=demo):
                     if ip_manager.add_whitelist(selected_ip):
                         record("whitelist_added", {"ip": selected_ip})
                         st.success(f"Added {selected_ip} to the whitelist.")
@@ -241,7 +245,7 @@ def show() -> None:
                     else:
                         st.warning("Already on the whitelist.")
             with col_blacklist:
-                if selected_ip and st.button("Add to blacklist", use_container_width=True):
+                if selected_ip and st.button("Add to blacklist", use_container_width=True, disabled=demo):
                     if ip_manager.add_blacklist(selected_ip):
                         record("blacklist_added", {"ip": selected_ip})
                         st.success(f"Added {selected_ip} to the blacklist.")
