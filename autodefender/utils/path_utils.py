@@ -56,15 +56,16 @@ def sanitize_path(path_str: str, include_log_dirs: bool = False) -> str:
         raise ValueError("Path contains invalid characters.")
 
     resolved = os.path.realpath(os.path.expanduser(cleaned))
-    # normcase so Windows paths match whatever their letter case (no-op elsewhere)
-    resolved_key = os.path.normcase(resolved)
     for base in allowed_base_dirs(include_log_dirs):
-        base_key = os.path.normcase(base)
-        if resolved_key == base_key:
+        prefix = os.path.join(base, "")  # Trailing separator so /data doesn't also allow /data-other
+        if os.path.normcase(resolved) == os.path.normcase(base):
             return base
-        # Trailing separator so /data doesn't also allow /data-other
-        if resolved_key.startswith(os.path.join(base_key, "")):
-            return resolved
+        if os.path.normcase(resolved).startswith(os.path.normcase(prefix)):
+            # Windows ignores letter case, so put the allowed folder's own spelling in front,
+            # then check the exact path we return (this is also the check code scanners look for)
+            candidate = os.path.normpath(prefix + resolved[len(prefix):])
+            if candidate.startswith(prefix):
+                return candidate
 
     raise ValueError(
         f"Path {cleaned} is outside the allowed folders. "
