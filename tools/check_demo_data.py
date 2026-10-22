@@ -88,9 +88,8 @@ def main() -> int:
         if path.suffix in SQLITE_SUFFIXES:
             conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
             try:
-                for table in ("threats", "actions"):
-                    # Table names come from the fixed tuple above
-                    for row in conn.execute(f"SELECT * FROM {table}"):  # nosec B608
+                for table, query in (("threats", "SELECT * FROM threats"), ("actions", "SELECT * FROM actions")):
+                    for row in conn.execute(query):
                         text = " ".join(str(v) for v in row if v is not None)
                         for ip in real_ips(text):
                             problems.append(f"{rel} ({table} id {row[0]}): real IP {ip}")

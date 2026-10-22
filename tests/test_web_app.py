@@ -217,3 +217,16 @@ def test_demo_does_not_pick_an_ai_model(app_env):
     assert not at.exception, errors(at)
     assert at.session_state["setup_complete"]
     assert at.session_state["ollama_model"] == ""  # AI stays optional; the user chooses a model
+
+
+def test_settings_purge_deletes_old_threats_and_their_actions(app_env):
+    import sqlite3
+    at = signed_in_app(app_env, "Settings")
+    next(n for n in at.number_input if "older than" in n.label).set_value(1)
+    next(b for b in at.button if b.label == "Delete old threats").click().run()
+    assert not at.exception and not at.error, errors(at)
+    assert any("Deleted 6 threat(s) older than 1 days" in s.value for s in at.success), [s.value for s in at.success]
+    conn = sqlite3.connect(app_env["db"])
+    assert conn.execute("SELECT COUNT(*) FROM threats").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM actions").fetchone()[0] == 0
+    assert "threats_purged" in {e["action"] for e in audit.entries()}

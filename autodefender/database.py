@@ -426,12 +426,10 @@ class Database:
             row['id'] for row in cursor.execute("SELECT id, timestamp FROM threats").fetchall()
             if to_utc(datetime.fromisoformat(row['timestamp'])).isoformat() < cutoff
         ]
-        for start in range(0, len(old_ids), 500):
-            chunk = old_ids[start:start + 500]
-            marks = ",".join("?" * len(chunk))
-            # marks is only "?" placeholders; the IDs are bound as parameters
-            cursor.execute(f"DELETE FROM actions WHERE threat_id IN ({marks})", chunk)  # nosec B608
-            cursor.execute(f"DELETE FROM threats WHERE id IN ({marks})", chunk)  # nosec B608
+        # The IDs go in as one JSON array parameter, so the SQL text is fixed and there's no variable limit
+        ids = json.dumps(old_ids)
+        cursor.execute("DELETE FROM actions WHERE threat_id IN (SELECT value FROM json_each(?))", (ids,))
+        cursor.execute("DELETE FROM threats WHERE id IN (SELECT value FROM json_each(?))", (ids,))
         self.conn.commit()
         logger.info(f"Purged {len(old_ids)} threats older than {days} days")
         return len(old_ids)

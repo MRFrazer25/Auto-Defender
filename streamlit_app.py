@@ -4,7 +4,6 @@
 import functools
 import hashlib
 import hmac
-import importlib
 import logging
 import os
 import secrets
@@ -20,6 +19,10 @@ from autodefender.login_lockout import (
     failures_for_client,
     global_backoff,
     lockout_remaining,
+)
+from streamlit_pages import (
+    action_management, audit_log, dashboard, documentation, incidents, ip_management, playbook_editor, settings,
+    setup, threat_analysis,
 )
 from streamlit_pages.session_config import PASSWORD_ENV, configured_password, public_demo
 
@@ -80,18 +83,18 @@ PLACEHOLDER_PASSWORDS = {
     "pick-any-long-password",
 }
 
-# Page name -> module in streamlit_pages
+# Page name -> its module in streamlit_pages (imported above, so only these pages can ever load)
 PAGES = {
-    "Setup": "setup",
-    "Dashboard": "dashboard",
-    "Incidents": "incidents",
-    "Threat Analysis": "threat_analysis",
-    "Action Management": "action_management",
-    "IP Management": "ip_management",
-    "Playbook Editor": "playbook_editor",
-    "Settings": "settings",
-    "Audit Log": "audit_log",
-    "Documentation": "documentation",
+    "Setup": setup,
+    "Dashboard": dashboard,
+    "Incidents": incidents,
+    "Threat Analysis": threat_analysis,
+    "Action Management": action_management,
+    "IP Management": ip_management,
+    "Playbook Editor": playbook_editor,
+    "Settings": settings,
+    "Audit Log": audit_log,
+    "Documentation": documentation,
 }
 RESTRICTED_BEFORE_SETUP = {
     "Dashboard", "Incidents", "Threat Analysis", "Action Management", "Playbook Editor", "IP Management",
@@ -357,7 +360,7 @@ def main() -> None:
     if force_setup_warning:
         st.sidebar.warning("Complete the setup page before using the console.")
 
-    importlib.import_module(f"streamlit_pages.{PAGES[selected_page]}").show()
+    PAGES[selected_page].show()
 
     st.sidebar.markdown("---")
     st.sidebar.caption("AutoDefender Web Console")
