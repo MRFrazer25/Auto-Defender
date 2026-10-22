@@ -1,9 +1,10 @@
-rich
-ollama
-watchdog
-python-dateutil
-streamlit
-plotly
-pandas
-httpx
-geoip2
+# Exact versions. Dependabot proposes updates weekly, once a release is 7 days old (.github/dependabot.yml).
+rich==15.0.0
+ollama==0.6.3
+watchdog==6.0.0
+python-dateutil==2.9.0.post0
+streamlit==1.66.1
+plotly==7.1.0
+pandas==3.0.6
+httpx==0.28.1
+geoip2==5.3.0
