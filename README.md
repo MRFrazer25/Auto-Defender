@@ -1,5 +1,8 @@
 # AutoDefender
 
+[![Checks](https://github.com/MRFrazer25/Auto-Defender/actions/workflows/checks.yml/badge.svg)](https://github.com/MRFrazer25/Auto-Defender/actions/workflows/checks.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MRFrazer25/Auto-Defender/blob/main/LICENSE)
+
 An AI-powered security tool that monitors Suricata network logs in real-time and analyzes historical log files to detect threats, provide AI-generated explanations, and recommend security actions.
 
 **Try it online**: [https://autodefender.streamlit.app/](https://autodefender.streamlit.app/)
